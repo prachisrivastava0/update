@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Lambda functions for login, reset password, logout, and user details with API Gateway integration.
+Resources:
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'LambdaExecutionPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:*'
+                  - 'dynamodb:*'
+                  - 's3:*'
+                Resource: 'arn:aws:s3:::testlambda-bucket12/*'
+
+  LoginFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.login
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: testlambda-bucket12
+        S3Key: login.zip
+      Runtime: nodejs18.x
+
+  ResetPasswordFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.resetPassword
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: testlambda-bucket12
+        S3Key: resetPassword.zip
+      Runtime: nodejs18.x
+
+  LogoutFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.logout
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: testlambda-bucket12
+        S3Key: logout.zip
+      Runtime: nodejs18.x
+
+  UserDetailsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.userDetails
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: testlambda-bucket12
+        S3Key: userdetails.zip
+      Runtime: nodejs18.x
+
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: UserManagementAPI
+
+  LoginResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: login
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ResetPasswordResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: resetPassword
+      RestApiId: !Ref ApiGatewayRestApi
+
+  LogoutResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: logout
+      RestApiId: !Ref ApiGatewayRestApi
+
+  UserDetailsResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: userDetails
+      RestApiId: !Ref ApiGatewayRestApi
+
+  LoginMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref LoginResource
+      RestApiId: !Ref ApiGatewayRestApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LoginFunction.Arn}/invocations'
+
+  ResetPasswordMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref ResetPasswordResource
+      RestApiId: !Ref ApiGatewayRestApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ResetPasswordFunction.Arn}/invocations'
+
+  LogoutMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref LogoutResource
+      RestApiId: !Ref ApiGatewayRestApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LogoutFunction.Arn}/invocations'
+
+  UserDetailsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref UserDetailsResource
+      RestApiId: !Ref ApiGatewayRestApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserDetailsFunction.Arn}/invocations'
+
+  ApiGatewayDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: prod
+    DependsOn:
+      - LoginMethod
+      - ResetPasswordMethod
+      - LogoutMethod
+      - UserDetailsMethod
+
+Outputs:
+  LoginApiEndpoint:
+    Description: "Endpoint for Login function"
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/login'
+
+  ResetPasswordApiEndpoint:
+    Description: "Endpoint for ResetPassword function"
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/resetPassword'
+
+  LogoutApiEndpoint:
+    Description: "Endpoint for Logout function"
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/logout'
+
+  UserDetailsApiEndpoint:
+    Description: "Endpoint for UserDetails function"
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/userDetails'

@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Upload file to S3 and process it with Lambda and DynamoDB
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+
+  SnsTopic:
+    Type: AWS::SNS::Topic
+
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: UploadedFiles
+      AttributeDefinitions:
+        - AttributeName: fileId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: fileId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  UploadLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: bucket2212
+        S3Key: index.js.zip
+      Runtime: nodejs20.x
+      Timeout: 60
+      Environment:
+        Variables:
+          S3BucketName: !Ref S3Bucket
+          SnsTopicArn: !Ref SnsTopic
+
+  ProcessLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: bucket2212
+        S3Key: index.js.zip
+      Runtime: nodejs20.x
+      Timeout: 60
+      Environment:
+        Variables:
+          DynamoDBTable: !Ref DynamoDBTable
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - s3:GetObject
+                  - sns:Publish
+                  - dynamodb:PutItem
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${S3Bucket}/*"
+  # S3BucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref S3Bucket
+  #     PolicyDocument:
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal: "*"
+  #           Action: "s3:GetObject"
+  #           Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+
+  SnsTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn: arn:aws:sns:us-east-1:471112938382:abc
+      Endpoint: !GetAtt ProcessLambda.Arn
+
+Outputs:
+  S3BucketName:
+    Value: !Ref S3Bucket
+  
+  SnsTopicArn:
+    Value: !Ref SnsTopic
+  DynamoDBTableName:
+    Value: !Ref DynamoDBTable
